@@ -74,7 +74,7 @@ data/<your-folder>/avatar.jpg
 If you do not provide an avatar, initials are shown automatically.
 
 ## 5) Verify Locally
-
+If you want to verify locally you can add your folder name to index.json BUT DO NOT PUSH the changed index.json
 Open the page  and run:
 - `ls`
 - `cat data/<your-folder>/profile.json`
