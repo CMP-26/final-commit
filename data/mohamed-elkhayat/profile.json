@@ -1,0 +1,19 @@
+{
+  "name": "Mohamed Elkhayat",
+  "tagline": "Exploring how machines understand language, images, and code.",
+  "stack": ["LLMs", "Multimodal AI", "Multi-Agent Systems", "AI Research", "Python", "PyTorch"],
+  "course": "None",
+  "gp": {
+    "title": "MalWhere? — AI Malware Detection",
+    "url": ""
+  },
+  "quote": "The best way to predict the future is to invent it.",
+  "message": "Be the best at something. If it's not GPA, let it be technology.",
+  "fun_fact": "Was absent often enough that he never actually met some of the professors who taught his courses.",
+  "links": {
+    "website": "https://mohamed-elkhayat.vercel.app/",
+    "github": "https://github.com/Elkhiat15",
+    "linkedin": "https://www.linkedin.com/in/mohamed-elkhayat-66b36521a/"
+  },
+  "image": "avatar.jpeg"
+}
