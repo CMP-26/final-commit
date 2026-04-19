@@ -177,7 +177,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;
 let ENTRIES=[];
 let PROFILES={};
 let FOLDERS=[];
-const ALL_CMDS=['help','ls','cat','clear','whoami','neofetch','countdown','grep','pwd','echo','exit','quit'];
+const ALL_CMDS=['help','ls','cat','clear','whoami','neofetch','countdown','think','grep','pwd','echo','exit','quit'];
 const TOTAL_CLASSMATES=64;
 const GRADUATION_AT=new Date(2026,6,2,15,0,0,0).getTime();
 let countdownTicker=null;
@@ -359,6 +359,7 @@ function renderHelp(){
     ['grep <query>','search by name or tech stack'],
     ['neofetch','system info (the important kind)'],
     ['countdown','time left until graduation'],
+    ['think','just think about it...'],
     ['whoami','existential inquiry'],
     ['pwd','current directory'],
     ['echo <text>','echo text back'],
@@ -704,6 +705,296 @@ async function renderRubbish() {
   injectInputRow(true);
   scrollBot();
 }
+async function renderFall() {
+  const frameEl = mk('div', 'ln');
+  frameEl.style.whiteSpace = 'pre';
+  frameEl.style.lineHeight = '1.25';
+  frameEl.style.fontFamily = 'monospace';
+  $out.appendChild(frameEl);
+
+  const FPS = 60;
+  const duration = 28.0; 
+  const start = performance.now();
+
+  // --- World & Camera Setup ---
+  const wW = 85; // Increased World Width
+  const wH = 40; 
+  const vW = 75; // Increased Viewport Width (Fixes clipped floor names)
+  const vH = 15; 
+
+  // --- Debris Physics System ---
+  const debris = [
+    { ch: '。', vx: -12.0, vy: -8.0 },
+    { ch: '`',  vx: -15.0, vy: -12.0 },
+    { ch: ',',  vx: -8.5,  vy: -14.0 },
+    { ch: ';',  vx: -16.0, vy: -5.5 },
+    { ch: ':',  vx: -11.0, vy: -10.0 },
+    { ch: '.',  vx: -18.5, vy: -3.0 },
+    { ch: '-',  vx: -9.0,  vy: -6.5 }
+  ];
+
+  while (true) {
+    const now = performance.now();
+    const t = (now - start) / 1000;
+
+    if (t > duration) break;
+
+    frameEl.textContent = renderFrame(t, wW, wH, vW, vH, debris);
+    scrollBot();
+
+    await new Promise(resolve => setTimeout(resolve, 1000 / FPS));
+  }
+
+  aln('');
+  aln(`<span class="dim">*PROBLEM SOLVED*</span>`);
+  aln('');
+  injectInputRow(true);
+  scrollBot();
+}
+
+function renderFrame(t, wW, wH, vW, vH, debris) {
+  // --- 1. TIMELINE ---
+  const T_WALK      = 0.0;
+  const T_PAN_UP    = 2.5;
+  const T_WAIT_TOP  = 5.0;
+  const T_SHOCK     = 6.0;   // Shockwave fires
+  const T_LAUNCH    = 7.0;   // Shockwave hits, student becomes a projectile
+  
+  // Projectile Math: y0 = 5, vy = -6 (upward arc), g = 16 (8*t^2)
+  // Landing at y = 36. Solving: 8t^2 - 6t - 31 = 0 => t ≈ 2.38s
+  const FALL_DUR    = 2.38; 
+  const IMPACT_T    = T_LAUNCH + FALL_DUR; // ~9.38s
+  
+  const T_STAND     = IMPACT_T + 2.0; 
+  const T_PROF_WALK = T_STAND + 1.0; 
+  const T_POKE_1    = T_PROF_WALK + 2.5; 
+  const T_POKE_2    = T_POKE_1 + 1.5; 
+  const T_SPEAK     = T_POKE_2 + 2.0; 
+  const T_RESPAWN   = T_SPEAK + 4.0;
+
+  // --- 2. STATE ---
+  let camX = 0, camY = wH - vH;
+  let profX = 5, profY = wH - 4;
+  let studX = 58, studY = 5, studRot = 0;
+  let studState = 'stand'; 
+  
+  let showShockwave = false, showDots = false, showBubble = false;
+
+  // --- 3. PARAMETRIC LOGIC ---
+
+  // Prof Initial Walk
+  if (t > T_WALK && t < T_PAN_UP) profX = lerp(5, 20, (t - T_WALK) / (T_PAN_UP - T_WALK));
+  else if (t >= T_PAN_UP) profX = 20;
+
+  // Camera Pan Up
+  if (t > T_PAN_UP && t < T_WAIT_TOP) camY = lerp(wH - vH, 0, smoothstep((t - T_PAN_UP) / (T_WAIT_TOP - T_PAN_UP)));
+  else if (t >= T_WAIT_TOP && t < T_LAUNCH) camY = 0;
+
+  // Shockwave starts before launch and keeps traveling left afterward.
+  if (t >= T_SHOCK) {
+    showShockwave = true;
+    if (t < T_LAUNCH) studState = 'lean';
+  }
+
+  // Projectile Fall (Launched by Shockwave)
+  let timeSinceImpact = t - IMPACT_T;
+  if (t >= T_LAUNCH) {
+    studState = 'fall';
+    
+    // Clamp the physics exactly on impact so he doesn't crawl/sink
+    let ft = Math.min(Math.max(0, t - T_LAUNCH), FALL_DUR);
+    
+    // x = x0 + vx * t
+    studX = 58 - (12 * ft); 
+    // y = y0 + vy * t + 0.5 * g * t^2
+    studY = 5 - (6 * ft) + (8 * ft * ft); 
+    
+    studRot = Math.floor(ft * 6) % 4; 
+
+    // Camera Aggressively Tracks the Fall
+    if (t < IMPACT_T) camY = Math.max(0, studY - vH / 2 + 2);
+  }
+
+  // Impact & Screen Shake
+  if (t >= IMPACT_T) {
+    studState = 'dead';
+    camY = wH - vH; // Lock to ground
+
+    if (timeSinceImpact > 0 && timeSinceImpact < 0.8) {
+      let shake = (0.8 - timeSinceImpact) * 6;
+      camY += (Math.random() - 0.5) * shake;
+      camX += (Math.random() - 0.5) * shake;
+    }
+  }
+
+  // Professor Reaction
+  let pSprite = ["  o  ", " /|\\ ", " / \\ "]; 
+  
+  if (t >= IMPACT_T && t < T_STAND) {
+    profX = 14; 
+    pSprite = [
+      " \\o/ ",
+      "  |  ",
+      " _/\\_"
+    ];
+  } 
+  else if (t >= T_STAND && t < T_PROF_WALK) {
+    profX = 14; 
+  } 
+  else if (t >= T_PROF_WALK && t < T_POKE_1) {
+    profX = lerp(14, studX - 7, smoothstep((t - T_PROF_WALK) / (T_POKE_1 - T_PROF_WALK)));
+  } 
+  else if (t >= T_POKE_1) {
+    profX = studX - 7;
+  }
+
+  // Poking FX
+  if (t > T_POKE_1 && t < T_SPEAK) {
+    showDots = true;
+    let p1 = Math.sin((t - T_POKE_1) * Math.PI * 4);
+    let p2 = (t > T_POKE_2) ? Math.sin((t - T_POKE_2) * Math.PI * 4) : -1;
+    if ((p1 > 0 && t < T_POKE_1 + 0.5) || (p2 > 0 && t < T_POKE_2 + 0.5)) {
+      pSprite = ["  o  ", " /|----", " / \\ "];
+    }
+  }
+
+  // Speak & Respawn
+  if (t >= T_SPEAK && t < T_RESPAWN) showBubble = true;
+  if (t >= T_RESPAWN) {
+    if (t < T_RESPAWN + 0.8) studState = 'glitch';
+    else studState = 'respawned';
+  }
+
+  // Bounds
+  camY = Math.max(0, Math.min(camY, wH - vH));
+  camX = Math.max(0, Math.min(camX, wW - vW));
+
+  // --- 4. RENDER TO GRID ---
+  const grid = Array.from({ length: wH }, () => Array.from({ length: wW }, () => ' '));
+
+  // Ground
+  for (let i = 0; i < wW; i++) grid[wH - 2][i] = '_'; 
+
+  // Building Geometry (Shifted right so it fully fits in camera)
+  for (let y = 0; y < wH - 1; y++) {
+    grid[y][60] = '|';
+    grid[y][74] = '|';
+  }
+  
+  drawText(grid, 62, wH - 3, "[  عمارة  ] ");
+  for (let floor = 1; floor <= 7; floor++) {
+    let fy = wH - 3 - (floor * 4);
+    if (fy > 0 && fy < wH) {
+      drawText(grid, 64, fy, `[FL ${floor}]`);
+      for (let x = 61; x < 74; x++) if (grid[fy + 2]) grid[fy + 2][x] = '-';
+    }
+  }
+
+  // Shockwave (Now coming from the right and continues after impact)
+  if (showShockwave) {
+    const waveText = "((((( RUBBISH!";
+    const waveSpeed = (85 - 60) / (T_LAUNCH - T_SHOCK);
+    const waveX = Math.round(85 - waveSpeed * (t - T_SHOCK));
+    if (waveX < wW && waveX + waveText.length > 0) {
+      drawText(grid, waveX, 5, waveText);
+    }
+  }
+
+  // Debris (Drawn BEFORE the student, so student body doesn't get holes)
+  if (t >= T_LAUNCH) {
+    let dt = t - T_LAUNCH;
+    debris.forEach(p => {
+      let px = 58 + p.vx * dt;
+      // Parabolic math for debris too
+      let py = 5 + p.vy * dt + (12 * dt * dt); 
+      
+      // Clamp to ground so they scatter and stay
+      if (py >= wH - 2) py = wH - 2;
+      
+      if (px > 0 && px < wW && py > 0 && py < wH) {
+        drawText(grid, Math.round(px), Math.round(py), p.ch);
+      }
+    });
+  }
+
+  // Draw Professor
+  drawSprite(grid, Math.round(profX), Math.round(profY), pSprite);
+
+  // Draw Student (Fixed rotation sprites so head/body never disappears)
+  let sSprite;
+  if (studState === 'stand') sSprite = ["  o  ", " /|\\ ", " / \\ "];
+  else if (studState === 'lean') sSprite = ["  o\\ ", "  /-\\", "  /\\ "];
+  else if (studState === 'fall') {
+    const rots = [
+      ["  o  ", " /|\\ ", " / \\ "], // Upright
+      ["   / ", " --o ", "   \\ "], // 90 deg (Sideways)
+      [" \\ / ", " \\|/ ", "  o  "], // 180 deg (Upside down)
+      [" \\   ", " o-- ", " /   "]  // 270 deg
+    ];
+    sSprite = rots[studRot];
+  }
+  else if (studState === 'dead') sSprite = ["       ", "       ", "_/-o-\\_"];
+  else if (studState === 'glitch') sSprite = [" ... ", " :.: ", ".:_:."];
+  else if (studState === 'respawned') sSprite = ["  o  ", " /|\\ ", " / \\ "];
+
+  drawSprite(grid, Math.round(studX), Math.round(studY), sSprite);
+
+  // FX
+  if (showDots) drawText(grid, Math.round(profX + 3), Math.round(profY - 2), "...");
+  if (showBubble) {
+    drawSprite(grid, Math.round(profX - 6), Math.round(profY - 5), [
+      ".-----------------------.",
+      "(   اصل فكر فيها كالاتي     )      ",
+      "'----------.------------'",
+      "           |"
+    ]);
+  }
+
+  // --- 5. CAMERA PROJECTION ---
+  let view = [];
+  let cY = Math.round(camY), cX = Math.round(camX);
+  
+  for (let y = 0; y < vH; y++) {
+    let wy = cY + y;
+    let rowStr = "";
+    if (wy >= 0 && wy < wH) {
+      let row = grid[wy];
+      for (let x = 0; x < vW; x++) {
+        let wx = cX + x;
+        rowStr += (wx >= 0 && wx < wW) ? row[wx] : " ";
+      }
+    } else rowStr = " ".repeat(vW);
+    view.push(rowStr);
+  }
+
+  return view.join('\n');
+}
+
+// --- UTILITY ---
+function drawSprite(grid, px, py, sprite) {
+  sprite.forEach((row, dy) => {
+    let chars = Array.from(row); 
+    chars.forEach((ch, dx) => {
+      // Overwrite only if it's not a space
+      if (ch !== ' ' && ch !== undefined) {
+        let x = px + dx, y = py + dy;
+        if (grid[y] && x >= 0 && x < grid[y].length) grid[y][x] = ch;
+      }
+    });
+  });
+}
+
+function drawText(grid, x, y, text) {
+  if (grid[y]) {
+    let chars = Array.from(text);
+    for (let i = 0; i < chars.length; i++) {
+      if (grid[y][x + i]) grid[y][x + i] = chars[i];
+    }
+  }
+}
+
+function lerp(a, b, t) { return a + (b - a) * Math.max(0, Math.min(1, t)); }
+function smoothstep(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); }
 
 function renderGrep(q){
   if(!q){aln(`<span class="r">grep: missing query. Usage: grep &lt;name or tech&gt;</span>`);return;}
@@ -778,6 +1069,9 @@ function execCmd(raw){
       break;
     case'pwd':
       aln(`<span class="tx">/home/grad/class-archive</span>`);
+      break;
+    case'think':
+      renderFall();
       break;
     case'echo':
       aln(`<span class="tx">${esc(rest)}</span>`);
